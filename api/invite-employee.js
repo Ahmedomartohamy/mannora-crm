@@ -1,8 +1,15 @@
 // api/invite-employee.js  (أو frontend/api/invite-employee.js لو جذر مشروعك هو frontend)
 const { createClient } = require('@supabase/supabase-js')
 
+const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+const sanitizeEmail = (s='') =>
+  s.toString()
+   .replace(/[\u200e\u200f<>]/g, '')  // شيل رموز الاتجاه + أقواس الزاوية
+   .replace(/\s/g, '')                // شيل كل المسافات
+   .trim()
+
 module.exports = async function handler(req, res) {
-  // فحص البيئة بدون كشف أسرار
+  // فحص البيئة
   if (req.method === 'GET' && (req.query.check === '1' || req.query.check === 'true')) {
     const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
     return res.status(200).json({
@@ -26,7 +33,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Server is not configured (env vars missing)' })
   }
 
-  // تحقُّق أن الطالب Admin باستخدام توكنه
+  // تحقق من توكن المستخدم (لازم يكون أدمن)
   const authHeader = req.headers.authorization || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
   if (!token) return res.status(401).json({ error: 'Missing user token' })
@@ -37,11 +44,16 @@ module.exports = async function handler(req, res) {
   const { data: isAdmin, error: adminErr } = await userClient.rpc('is_admin')
   if (adminErr || !isAdmin) return res.status(403).json({ error: 'Forbidden' })
 
-  // إدخال الدعوة
-  const { email, full_name, role } = req.body || {}
+  // ادخل البيانات ونظّف الإيميل
+  const { email: rawEmail, full_name, role } = req.body || {}
+  const email = sanitizeEmail(rawEmail)
   const ALLOWED = ['admin', 'manager', 'user', 'secretary']
-  if (!email || !ALLOWED.includes(role)) {
-    return res.status(400).json({ error: 'Invalid input' })
+
+  if (!email || !EMAIL_RE.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format. Use like employee@example.com' })
+  }
+  if (!ALLOWED.includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' })
   }
 
   // عميل سيرفر
@@ -54,7 +66,7 @@ module.exports = async function handler(req, res) {
   })
 
   if (invErr) {
-    // لو موجود بالفعل
+    // لو موجود بالفعل، نحاول نجيبه
     const { data: list, error: listErr } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 200 })
     if (listErr) return res.status(500).json({ error: listErr.message })
     const existing = list?.users?.find(u => (u.email || '').toLowerCase() === email.toLowerCase())

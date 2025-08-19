@@ -4,15 +4,25 @@ import Modal from '../../components/Modal'
 import { supabase } from '../../lib/supabase'
 
 const ROLES = ['admin','manager','user','secretary']
+const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+const sanitizeEmail = (s='') =>
+  s.toString()
+   // إزالة علامات الاتجاه الخفية + أقواس الزاوية + كل الفراغات
+   .replace(/[\u200e\u200f<>]/g, '')
+   .replace(/\s/g, '')
+   .trim()
 
 export default function UsersAdmin() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
+
   const [modal, setModal] = useState({ open:false, user:null, role:'manager' })
+
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email:'', full_name:'', role:'user' })
+  const [inviteErr, setInviteErr] = useState('')
   const [inviteBusy, setInviteBusy] = useState(false)
 
   const load = async () => {
@@ -60,6 +70,12 @@ export default function UsersAdmin() {
   }
 
   const sendInvite = async () => {
+    setInviteErr('')
+    const email = sanitizeEmail(inviteForm.email)
+    if (!EMAIL_RE.test(email)) {
+      setInviteErr('صيغة البريد الإلكتروني غير صحيحة. اكتب مثال: employee@example.com بدون أقواس أو مسافات.')
+      return
+    }
     try {
       setInviteBusy(true)
       const { data: { session } } = await supabase.auth.getSession()
@@ -70,12 +86,12 @@ export default function UsersAdmin() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(inviteForm)
+        body: JSON.stringify({ ...inviteForm, email })
       })
       const json = await resp.json()
       setInviteBusy(false)
       if (!resp.ok) {
-        alert(json.error || 'فشل إرسال الدعوة')
+        setInviteErr(json.error || 'فشل إرسال الدعوة')
         return
       }
       setInviteOpen(false)
@@ -84,7 +100,7 @@ export default function UsersAdmin() {
       alert('تم إرسال دعوة الموظّف بنجاح ✉️')
     } catch (e) {
       setInviteBusy(false)
-      alert(e.message)
+      setInviteErr(e.message)
     }
   }
 
@@ -94,7 +110,7 @@ export default function UsersAdmin() {
         <h2>إدارة المستخدمين</h2>
         <div style={{display:'flex', gap:8}}>
           <input className="input" placeholder="بحث بالبريد/الاسم" value={q} onChange={e=>setQ(e.target.value)} style={{width:320}} />
-          <button className="btn" onClick={()=>setInviteOpen(true)}>دعوة موظّف</button>
+          <button className="btn" onClick={()=>{ setInviteOpen(true); setInviteErr('') }}>دعوة موظّف</button>
         </div>
       </div>
 
@@ -163,7 +179,14 @@ export default function UsersAdmin() {
             <div className="row">
               <div>
                 <label>البريد الإلكتروني</label>
-                <input className="input" value={inviteForm.email} onChange={e=>setInviteForm(f=>({...f,email:e.target.value}))} placeholder="employee@example.com" />
+                <input
+                  className="input"
+                  value={inviteForm.email}
+                  onChange={e=>setInviteForm(f=>({...f,email:e.target.value}))}
+                  placeholder="employee@example.com"
+                  type="email"
+                />
+                {inviteErr && <div style={{color:'#dc2626', fontSize:14, marginTop:6}}>{inviteErr}</div>}
               </div>
               <div>
                 <label>الاسم الكامل</label>
