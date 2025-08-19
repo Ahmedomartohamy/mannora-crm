@@ -1,4 +1,3 @@
-
 import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -6,8 +5,20 @@ export default function Layout({ children }) {
   const navigate = useNavigate()
 
   const logout = async () => {
-    await supabase.auth.signOut()
-    navigate('/login')
+    try {
+      // خروج محلي لتفادي 403 من الـ global
+      await supabase.auth.signOut({ scope: 'local' })
+    } catch (e) {
+      // حتى لو حصل خطأ، كمّل تنظيف وتوجيه
+      console.error(e)
+    }
+
+    // تنظيف أي بيانات محلية ممكن ترجّع الجلسة تاني
+    localStorage.clear()
+    sessionStorage.clear()
+
+    // توجيه لصفحة تسجيل الدخول
+    navigate('/login', { replace: true })
   }
 
   return (
