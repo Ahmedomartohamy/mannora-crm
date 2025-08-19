@@ -1,0 +1,39 @@
+
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM MVP</title>
+    <style>
+      :root { --primary:#2563eb; --bg:#f8fafc; --card:#ffffff; --border:#e5e7eb; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, 'Noto Kufi Arabic', 'Cairo', 'Tajawal', sans-serif; background: var(--bg); color:#0f172a; }
+      a { color: inherit; text-decoration: none; }
+      .container { display:flex; min-height:100vh; }
+      .sidebar { width: 260px; background:#0f172a; color:#e2e8f0; padding:16px; }
+      .sidebar .logo { font-weight:700; font-size:20px; margin-bottom:24px; }
+      .nav a { display:block; padding:10px 12px; border-radius:12px; margin-bottom:8px; color:#e2e8f0; }
+      .nav a.active, .nav a:hover { background:#1f2937; }
+      .content { flex:1; padding:20px; }
+      .card { background: var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; }
+      .btn { background: var(--primary); color:white; padding:10px 16px; border:none; border-radius:12px; cursor:pointer; }
+      .btn.secondary{ background:#334155; }
+      .btn.danger{ background:#dc2626; }
+      .btn:disabled{ opacity:.6; cursor:not-allowed; }
+      .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+      .table { width:100%; border-collapse: collapse; }
+      .table th, .table td { padding:12px; border-bottom:1px solid var(--border); text-align:right; }
+      .input, .select, .textarea { width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; background:white; }
+      .row { display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; }
+      .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50; }
+      .modal{ width:min(560px, 92vw); background:var(--card); border-radius:16px; border:1px solid var(--border); padding:16px; }
+      .link{ color:var(--primary); cursor:pointer; }
+      .center { display:flex; align-items:center; justify-content:center; height:60vh; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
