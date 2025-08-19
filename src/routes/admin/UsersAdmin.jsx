@@ -11,6 +11,9 @@ export default function UsersAdmin() {
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   const [modal, setModal] = useState({ open:false, user:null, role:'manager' })
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteForm, setInviteForm] = useState({ email:'', full_name:'', role:'user' })
+  const [inviteBusy, setInviteBusy] = useState(false)
 
   const load = async () => {
     setLoading(true); setError('')
@@ -56,11 +59,43 @@ export default function UsersAdmin() {
     await load()
   }
 
+  const sendInvite = async () => {
+    try {
+      setInviteBusy(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const resp = await fetch('/api/invite-employee', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(inviteForm)
+      })
+      const json = await resp.json()
+      setInviteBusy(false)
+      if (!resp.ok) {
+        alert(json.error || 'فشل إرسال الدعوة')
+        return
+      }
+      setInviteOpen(false)
+      setInviteForm({ email:'', full_name:'', role:'user' })
+      await load()
+      alert('تم إرسال دعوة الموظّف بنجاح ✉️')
+    } catch (e) {
+      setInviteBusy(false)
+      alert(e.message)
+    }
+  }
+
   return (
     <Layout>
       <div className="header">
         <h2>إدارة المستخدمين</h2>
-        <input className="input" placeholder="بحث بالبريد/الاسم" value={q} onChange={e=>setQ(e.target.value)} style={{width:320}} />
+        <div style={{display:'flex', gap:8}}>
+          <input className="input" placeholder="بحث بالبريد/الاسم" value={q} onChange={e=>setQ(e.target.value)} style={{width:320}} />
+          <button className="btn" onClick={()=>setInviteOpen(true)}>دعوة موظّف</button>
+        </div>
       </div>
 
       <div className="card">
@@ -102,6 +137,7 @@ export default function UsersAdmin() {
         }
       </div>
 
+      {/* إضافة دور لمستخدم موجود */}
       {modal.open && (
         <Modal title="إضافة دور" onClose={closeModal}>
           <div style={{display:'grid', gap:12}}>
@@ -115,6 +151,36 @@ export default function UsersAdmin() {
             <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
               <button className="btn secondary" onClick={closeModal}>إلغاء</button>
               <button className="btn" onClick={addRole}>حفظ</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* دعوة موظّف جديد */}
+      {inviteOpen && (
+        <Modal title="دعوة موظّف" onClose={()=>setInviteOpen(false)}>
+          <div style={{display:'grid', gap:12}}>
+            <div className="row">
+              <div>
+                <label>البريد الإلكتروني</label>
+                <input className="input" value={inviteForm.email} onChange={e=>setInviteForm(f=>({...f,email:e.target.value}))} placeholder="employee@example.com" />
+              </div>
+              <div>
+                <label>الاسم الكامل</label>
+                <input className="input" value={inviteForm.full_name} onChange={e=>setInviteForm(f=>({...f,full_name:e.target.value}))} placeholder="الاسم" />
+              </div>
+            </div>
+            <div>
+              <label>الدور</label>
+              <select className="select" value={inviteForm.role} onChange={e=>setInviteForm(f=>({...f,role:e.target.value}))}>
+                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+              <button className="btn secondary" onClick={()=>setInviteOpen(false)}>إلغاء</button>
+              <button className="btn" onClick={sendInvite} disabled={inviteBusy}>
+                {inviteBusy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}
+              </button>
             </div>
           </div>
         </Modal>
