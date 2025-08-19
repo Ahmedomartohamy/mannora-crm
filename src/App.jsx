@@ -6,6 +6,7 @@ import ClientsList from './routes/clients/ClientsList'
 import ProjectsList from './routes/projects/ProjectsList'
 import UsersAdmin from './routes/admin/UsersAdmin'
 import SetPassword from './routes/auth/SetPassword'
+import Profile from './routes/account/Profile'
 
 export default function App() {
   return (
@@ -14,20 +15,12 @@ export default function App() {
       <Route path="/set-password" element={<SetPassword />} />
       <Route path="/" element={<Navigate to="/clients" replace />} />
 
-      <Route path="/clients" element={
-        <ProtectedRoute><ClientsList /></ProtectedRoute>
-      } />
-
-      <Route path="/projects" element={
-        <ProtectedRoute><ProjectsList /></ProtectedRoute>
-      } />
+      <Route path="/clients" element={<ProtectedRoute><ClientsList /></ProtectedRoute>} />
+      <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
+      <Route path="/account"  element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
       <Route path="/admin/users" element={
-        <ProtectedRoute>
-          <AdminRoute>
-            <UsersAdmin />
-          </AdminRoute>
-        </ProtectedRoute>
+        <ProtectedRoute><AdminRoute><UsersAdmin /></AdminRoute></ProtectedRoute>
       } />
 
       <Route path="*" element={<Navigate to="/" replace />} />

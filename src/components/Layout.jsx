@@ -16,13 +16,8 @@ export default function Layout({ children }) {
   }, [])
 
   const logout = async () => {
-    try {
-      await supabase.auth.signOut({ scope: 'local' })
-    } catch (e) {
-      console.error(e)
-    }
-    localStorage.clear()
-    sessionStorage.clear()
+    try { await supabase.auth.signOut({ scope: 'local' }) } catch (e) { console.error(e) }
+    localStorage.clear(); sessionStorage.clear()
     navigate('/login', { replace: true })
   }
 
@@ -33,6 +28,7 @@ export default function Layout({ children }) {
         <nav className="nav">
           <NavLink to="/clients" className={({isActive}) => isActive ? 'active' : ''}>العملاء</NavLink>
           <NavLink to="/projects" className={({isActive}) => isActive ? 'active' : ''}>المشاريع</NavLink>
+          <NavLink to="/account"  className={({isActive}) => isActive ? 'active' : ''}>الملف الشخصي</NavLink>
           {isAdmin && (
             <NavLink to="/admin/users" className={({isActive}) => isActive ? 'active' : ''}>إدارة المستخدمين</NavLink>
           )}
