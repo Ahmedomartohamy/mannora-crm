@@ -1,47 +1,59 @@
-// api/invite-employee.js
-import { createClient } from '@supabase/supabase-js'
+// api/invite-employee.js  (أو frontend/api/invite-employee.js لو جذر مشروعك هو frontend)
+const { createClient } = require('@supabase/supabase-js')
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
+  // فحص سريع للبيئة بدون كشف الأسرار (GET /api/invite-employee?check=1)
+  if (req.method === 'GET' && (req.query.check === '1' || req.query.check === 'true')) {
+    return res.status(200).json({
+      hasUrl: !!process.env.SUPABASE_URL,
+      hasService: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      hasAnon: !!(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)
+    })
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST'])
+    res.setHeader('Allow', ['POST', 'GET'])
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   const SUPABASE_URL = process.env.SUPABASE_URL
   const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!SUPABASE_URL || !SERVICE_ROLE) {
+  const ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+
+  if (!SUPABASE_URL || !SERVICE_ROLE || !ANON_KEY) {
     return res.status(500).json({ error: 'Server is not configured (env vars missing)' })
   }
 
-  // 1) تحقق إن اللي بيطلب أدمن (باستخدام توكن المستخدم المرسل من الفرونت)
+  // تحقُّق إن صاحب الطلب Admin باستخدام توكنه
   const authHeader = req.headers.authorization || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
   if (!token) return res.status(401).json({ error: 'Missing user token' })
 
-  const userClient = createClient(SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY || '', {
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } }
   })
 
   const { data: isAdmin, error: adminErr } = await userClient.rpc('is_admin')
   if (adminErr || !isAdmin) return res.status(403).json({ error: 'Forbidden' })
 
-  // 2) البيانات
+  // إدخال بيانات الدعوة
   const { email, full_name, role } = req.body || {}
   const ALLOWED = ['admin', 'manager', 'user', 'secretary']
   if (!email || !ALLOWED.includes(role)) {
     return res.status(400).json({ error: 'Invalid input' })
   }
 
+  // عميل له صلاحيات السيرفر
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE)
 
-  // 3) ادعو المستخدم بالبريد (هيروحه ايميل دعوة)
+  // 1) دعوة المستخدم
   let userId = null
   const { data: invite, error: invErr } = await adminClient.auth.admin.inviteUserByEmail(email, {
     data: { full_name }
   })
 
   if (invErr) {
-    // لو المستخدم موجود فعلًا، نحاول نلاقيه من القائمة
+    // لو موجود بالفعل، نحاول نجيبه
     const { data: list, error: listErr } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 200 })
     if (listErr) return res.status(500).json({ error: listErr.message })
     const existing = list?.users?.find(u => (u.email || '').toLowerCase() === email.toLowerCase())
@@ -53,7 +65,7 @@ export default async function handler(req, res) {
 
   if (!userId) return res.status(500).json({ error: 'No user id returned' })
 
-  // 4) كمل بيانات profiles + اضبط الدور
+  // 2) استكمال بروفايل + ضبط الدور
   const up1 = await adminClient.from('profiles').upsert(
     { id: userId, full_name },
     { onConflict: 'id' }
