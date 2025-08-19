@@ -5,11 +5,13 @@ import Login from './routes/login/Login'
 import ClientsList from './routes/clients/ClientsList'
 import ProjectsList from './routes/projects/ProjectsList'
 import UsersAdmin from './routes/admin/UsersAdmin'
+import SetPassword from './routes/auth/SetPassword'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/set-password" element={<SetPassword />} />
       <Route path="/" element={<Navigate to="/clients" replace />} />
 
       <Route path="/clients" element={
