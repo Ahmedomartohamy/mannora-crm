@@ -103,17 +103,30 @@ function DraggableLead({ lead, ownerName, onEdit, onDel, onConvert }) {
 export default function LeadsBoard() {
   const [me, setMe] = useState(null)
   const [isAdminOrManager, setIsAdminOrManager] = useState(false)
+  const [hasOrderIndex, setHasOrderIndex] = useState(null) // null=unknown
+
   const [users, setUsers] = useState([])
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [q, setQ] = useState(''); const [fltOwner, setFltOwner] = useState(''); const [onlyMine, setOnlyMine] = useState(false)
-  const [modalOpen, setModalOpen] = useState(false); const [editing, setEditing] = useState(null)
+
+  const [q, setQ] = useState('')
+  const [fltOwner, setFltOwner] = useState('')
+  const [onlyMine, setOnlyMine] = useState(false)
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user || null))
     Promise.all([supabase.rpc('is_admin'), supabase.rpc('has_role', { r: 'manager' })])
       .then(([a,m]) => setIsAdminOrManager(Boolean(a?.data)||Boolean(m?.data)))
+
+    // هل عمود الترتيب موجود؟
+    ;(async () => {
+      const probe = await supabase.from('leads').select('stage_order_index').limit(1)
+      setHasOrderIndex(!probe.error)
+    })()
   }, [])
 
   const loadUsers = async () => {
@@ -123,17 +136,38 @@ export default function LeadsBoard() {
       setUsers(u ? [{ user_id: u.id, email: u.email, full_name: u.user_metadata?.full_name }] : [])
     } else setUsers(data)
   }
+
   const loadLeads = async () => {
     setLoading(true); setError('')
-    const sel = await supabase.from('leads').select('*').order('updated_at', { ascending:false }).order('created_at', { ascending:false })
-    setLoading(false); if (sel.error) setError(sel.error.message); else setRows(sel.data || [])
+    let sel
+    if (hasOrderIndex) {
+      sel = await supabase.from('leads')
+        .select('*, stage_order_index')
+        .order('stage', { ascending:true }) // علشان الاندكس يشتغل كويس
+        .order('stage_order_index', { ascending:true, nullsFirst:false })
+        .order('updated_at', { ascending:false })
+    } else {
+      sel = await supabase.from('leads')
+        .select('*')
+        .order('updated_at', { ascending:false })
+        .order('created_at', { ascending:false })
+    }
+    setLoading(false)
+    if (sel.error) setError(sel.error.message)
+    else setRows(sel.data || [])
   }
+
   useEffect(() => {
-    loadUsers(); loadLeads()
-    // لو Realtime متفعّل هيحدّث لوحده، وإلا التحديث المتفائل يكفي
-    const ch = supabase.channel('leads-board').on('postgres_changes', { event:'*', schema:'public', table:'leads' }, () => loadLeads()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    loadUsers()
   }, [])
+  useEffect(() => {
+    if (hasOrderIndex === null) return
+    loadLeads()
+    const ch = supabase.channel('leads-board')
+      .on('postgres_changes', { event:'*', schema:'public', table:'leads' }, () => loadLeads())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [hasOrderIndex])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -151,9 +185,19 @@ export default function LeadsBoard() {
   const leadsByStage = useMemo(() => {
     const m = Object.fromEntries(STAGES.map(s => [s.value, []]))
     for (const l of filtered) (m[l.stage || 'new'] || m['new']).push(l)
-    Object.keys(m).forEach(k => m[k].sort((a,b)=> new Date(b.updated_at) - new Date(a.updated_at)))
+
+    if (hasOrderIndex) {
+      Object.keys(m).forEach(k => m[k].sort((a,b) => {
+        const ao = a.stage_order_index ?? Number.MAX_SAFE_INTEGER
+        const bo = b.stage_order_index ?? Number.MAX_SAFE_INTEGER
+        if (ao !== bo) return ao - bo
+        return new Date(b.updated_at) - new Date(a.updated_at)
+      }))
+    } else {
+      Object.keys(m).forEach(k => m[k].sort((a,b)=> new Date(b.updated_at) - new Date(a.updated_at)))
+    }
     return m
-  }, [filtered])
+  }, [filtered, hasOrderIndex])
 
   const ownerName = useCallback((uid) => {
     const u = users.find(x => x.user_id === uid)
@@ -171,26 +215,47 @@ export default function LeadsBoard() {
 
     const leadId = active.id
     const current = rows.find(r => r.id === leadId)
-    if (!current || current.stage === destStage) return
+    if (!current) return
 
-    // تحديث متفائل فوري
-    setRows(prev => prev.map(r => r.id === leadId
-      ? { ...r, stage: destStage, updated_at: new Date().toISOString() }
-      : r
-    ))
+    // احسب index الجديد (أعلى العمود = min-1)
+    let nextIndex = undefined
+    if (hasOrderIndex) {
+      const col = rows.filter(l => l.id !== leadId && (l.stage || 'new') === destStage)
+      const minVal = col.length ? Math.min(...col.map(l => (l.stage_order_index ?? 0))) : null
+      nextIndex = (minVal === null) ? 0 : (minVal - 1)
+    }
 
-    // حفظ في الداتابيس
-    const { error } = await supabase.from('leads').update({ stage: destStage }).eq('id', leadId)
+    // تحديث متفائل
+    setRows(prev => prev.map(r => {
+      if (r.id !== leadId) return r
+      const sameStage = (current.stage === destStage)
+      return {
+        ...r,
+        stage: destStage,
+        updated_at: new Date().toISOString(),
+        ...(hasOrderIndex ? { stage_order_index: nextIndex ?? (sameStage ? (r.stage_order_index ?? 0) : (r.stage_order_index)) } : {})
+      }
+    }))
+
+    // حفظ DB: لو نفس العمود وبرضه عايزين نحطه فوق، هنحدّث بس الـindex
+    const patch = hasOrderIndex
+      ? { stage: destStage, stage_order_index: nextIndex }
+      : { stage: destStage }
+
+    // لو نفس المرحلة ومفيش عمود ترتيب، مفيش داعي نحفظ
+    if (!hasOrderIndex && current.stage === destStage) return
+
+    const { error } = await supabase.from('leads').update(patch).eq('id', leadId)
     if (error) {
       alert(error.message)
-      // رجوع في حالة الفشل
-      setRows(prev => prev.map(r => r.id === leadId ? { ...r, stage: current.stage } : r))
+      // رجوع لو فشل
+      setRows(prev => prev.map(r => r.id === leadId ? { ...r, stage: current.stage, stage_order_index: current.stage_order_index } : r))
     }
   }
 
   const openNew = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (l) => { setEditing(l); setModalOpen(true) }
-  const del = async (l) => { if (!confirm('هل تريد حذف هذا العميل المحتمل؟')) return; const { error } = await supabase.from('leads').delete().eq('id', l.id); if (error) alert(error.message) }
+  const del = async (l) => { if (!confirm('حذف هذا العميل المحتمل؟')) return; const { error } = await supabase.from('leads').delete().eq('id', l.id); if (error) alert(error.message) }
   const convertLead = async (l) => { if (l.client_id) return alert('تم التحويل بالفعل'); if (!confirm('تحويل إلى عميل؟')) return; const { error } = await supabase.rpc('lead_convert_to_client', { p_lead_id: l.id }); if (error) alert(error.message) }
 
   return (
@@ -214,20 +279,36 @@ export default function LeadsBoard() {
         </div>
       </div>
 
-      {loading ? <div className="card">جارٍ التحميل…</div> :
-       error   ? <div className="card" style={{color:'#dc2626'}}>{error}</div> :
-       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-         <div style={{display:'grid', gridTemplateColumns:'repeat(6, minmax(240px, 1fr))', gap:12}}>
-           {STAGES.map(s => (
-             <Column key={s.value} id={s.value} title={s.label} count={(leadsByStage[s.value]||[]).length}>
-               {(leadsByStage[s.value] || []).map(l =>
-                 <DraggableLead key={l.id} lead={l} ownerName={ownerName} onEdit={openEdit} onDel={del} onConvert={convertLead} />
-               )}
-             </Column>
-           ))}
-         </div>
-       </DndContext>}
-      <LeadModal open={modalOpen} onClose={()=>setModalOpen(false)} initial={editing} onSaved={()=>loadLeads()} canPickOwner={isAdminOrManager} users={users} />
+      {(loading || hasOrderIndex===null) ? (
+        <div className="card">جارٍ التحميل…</div>
+      ) : error ? (
+        <div className="card" style={{color:'#dc2626'}}>{error}</div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(6, minmax(240px, 1fr))', gap:12}}>
+            {STAGES.map(s => (
+              <Column key={s.value} id={s.value} title={s.label} count={(leadsByStage[s.value]||[]).length}>
+                {(leadsByStage[s.value] || []).map(l =>
+                  <DraggableLead key={l.id} lead={l} ownerName={(uid)=>users.find(u=>u.user_id===uid)?.full_name || users.find(u=>u.user_id===uid)?.email || '—'}
+                    onEdit={(ll)=>{ setEditing(ll); setModalOpen(true) }}
+                    onDel={async (ll)=>{ if (!confirm('حذف هذا العميل المحتمل؟')) return; const { error } = await supabase.from('leads').delete().eq('id', ll.id); if (error) alert(error.message) }}
+                    onConvert={convertLead}
+                  />
+                )}
+              </Column>
+            ))}
+          </div>
+        </DndContext>
+      )}
+
+      <LeadModal
+        open={modalOpen}
+        onClose={()=>setModalOpen(false)}
+        initial={editing}
+        onSaved={()=>loadLeads()}
+        canPickOwner={isAdminOrManager}
+        users={users}
+      />
     </Layout>
   )
 }
