@@ -28,6 +28,7 @@ export default function Layout({ children }) {
         <nav className="nav">
           <NavLink to="/clients" className={({isActive}) => isActive ? 'active' : ''}>العملاء</NavLink>
           <NavLink to="/projects" className={({isActive}) => isActive ? 'active' : ''}>المشاريع</NavLink>
+          <NavLink to="/leads"    className={({isActive}) => isActive ? 'active' : ''}>العملاء المحتملون</NavLink>
           <NavLink to="/tasks"    className={({isActive}) => isActive ? 'active' : ''}>المهام</NavLink>
           <NavLink to="/account"  className={({isActive}) => isActive ? 'active' : ''}>الملف الشخصي</NavLink>
           {isAdmin && (

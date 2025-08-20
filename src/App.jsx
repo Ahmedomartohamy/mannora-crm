@@ -4,10 +4,11 @@ import AdminRoute from './components/AdminRoute'
 import Login from './routes/login/Login'
 import ClientsList from './routes/clients/ClientsList'
 import ProjectsList from './routes/projects/ProjectsList'
+import TasksList from './routes/tasks/TasksList'
 import UsersAdmin from './routes/admin/UsersAdmin'
 import SetPassword from './routes/auth/SetPassword'
 import Profile from './routes/account/Profile'
-import TasksList from './routes/tasks/TasksList'
+import LeadsList from './routes/leads/LeadsList'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/clients" element={<ProtectedRoute><ClientsList /></ProtectedRoute>} />
       <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
       <Route path="/tasks"    element={<ProtectedRoute><TasksList /></ProtectedRoute>} />
+      <Route path="/leads"    element={<ProtectedRoute><LeadsList /></ProtectedRoute>} />
       <Route path="/account"  element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
       <Route path="/admin/users" element={
