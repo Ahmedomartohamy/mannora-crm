@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../components/Layout'
 import LeadModal from './LeadModal'
 import { supabase } from '../../lib/supabase'
+import { Link } from 'react-router-dom'
 
 const STAGE_LABEL = {
   new:'جديد', contacted:'تم التواصل', qualified:'مؤهّل', proposal:'عرض مُرسل', won:'مكتسب', lost:'مفقود'
@@ -140,6 +141,7 @@ export default function LeadsList() {
             مملوك لي فقط
           </label>
           <button className="btn" onClick={openNew}>عميل محتمل جديد</button>
+          <Link className="btn secondary" to="/leads/board">عرض كانبان</Link>
         </div>
       </div>
 

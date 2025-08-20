@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Layout from '../../components/Layout'
 import TaskModal from './TaskModal'
 import { supabase } from '../../lib/supabase'
@@ -146,6 +147,7 @@ export default function TasksList() {
             مهامي فقط
           </label>
           <button className="btn" onClick={openNew}>مهمة جديدة</button>
+          <Link className="btn secondary" to="/tasks/board">عرض كانبان</Link>
         </div>
       </div>
 
